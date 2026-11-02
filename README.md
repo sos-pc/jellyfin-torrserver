@@ -4,6 +4,22 @@
 
 Plugin serveur Jellyfin : parcourir les affiches TMDB sans télécharger les films, choisir un torrent dans Prowlarr, choisir un fichier dans ce torrent, puis le lire via TorrServer. Aucun changement du code source de Jellyfin.
 
+## Captures réelles de l’interface
+
+Captures prises dans Jellyfin **12.4**, avec le plugin **0.1.1.2**. Les identifiants ne sont pas renseignés sur ces captures : le catalogue montre son entrée Films/Séries, pas encore les affiches de TMDB.
+
+### Configuration du plugin
+
+![Configuration du plugin, avec le champ du jeton de lecture TMDB](docs/screenshots/configuration.png)
+
+### Accueil de Jellyfin et logo du plugin
+
+![Catalogue TMDB dans l’accueil de Jellyfin](docs/screenshots/accueil.png)
+
+### Entrée du catalogue
+
+![Dossiers Films populaires et Séries populaires](docs/screenshots/catalogue.png)
+
 ## Installation
 
 Dans **Tableau de bord → Extensions → Dépôts**, ajouter ce dépôt :
