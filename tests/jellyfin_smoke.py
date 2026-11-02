@@ -6,8 +6,12 @@ def call(path, data=None, headers=None):
         body=r.read()
         return json.loads(body) if body else None
 for i in range(20):
-    try: info=call('/System/Info/Public'); break
-    except OSError: time.sleep(1)
+    try:
+        info=call('/System/Info/Public')
+        if 'StartupWizardCompleted' in info: break
+    except OSError: pass
+    time.sleep(1)
+else: raise RuntimeError('Jellyfin did not finish starting.')
 if not info['StartupWizardCompleted']:
     call("/Startup/User")
     call('/Startup/Configuration',{'UICulture':'fr','MetadataCountryCode':'FR','PreferredMetadataLanguage':'fr'})
@@ -20,13 +24,14 @@ if os.environ.get('JELLYFIN_SMOKE_INSTALL') == '1':
     call('/Repositories',[{'Name':'TorrServer test','Url':repository,'Enabled':True}],headers=headers)
     packages=call('/Packages',headers=headers)
     package=next(p for p in packages if p['name']=='TorrServer')
-    assert package['versions'][0]['version']==os.environ.get('JELLYFIN_SMOKE_VERSION','0.1.0.2')
-    call('/Packages/Installed/TorrServer?assemblyGuid=655fbf1b-525b-4f82-bdeb-f27dd0bdd606&version='+os.environ.get('JELLYFIN_SMOKE_VERSION','0.1.0.2'),{},headers=headers)
+    assert any(v['version']==os.environ.get('JELLYFIN_SMOKE_VERSION','0.1.0.2') for v in package['versions']), [(v['version'], v['targetAbi']) for v in package['versions']]
+    call('/Packages/Installed/TorrServer?assemblyGuid=655fbf1b-525b-4f82-bdeb-f27dd0bdd606',{},headers=headers)
     print('PASS: Jellyfin downloaded, checked and installed the remote package; restart the test server, then rerun without JELLYFIN_SMOKE_INSTALL.')
     raise SystemExit(0)
 plugins=call('/Plugins',headers=headers)
 plugin=next(p for p in plugins if p['Id'].replace('-','')=='655fbf1b525b4f82bdebf27dd0bdd606')
 assert plugin['Status']=='Active',plugin
+if os.environ.get('JELLYFIN_SMOKE_VERSION'): assert plugin['Version']==os.environ['JELLYFIN_SMOKE_VERSION'],plugin['Version']
 channels=call('/Channels',headers=headers)
 channel=next(x for x in channels['Items'] if x['Name']=='Catalogue TMDB')
 items=call('/Channels/'+channel['Id']+'/Items',headers=headers)
