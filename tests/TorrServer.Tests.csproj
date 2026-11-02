@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+<PropertyGroup><TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
 <JellyfinVersion Condition="'$(TargetFramework)' == 'net8.0'">10.10.7</JellyfinVersion>
-<JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><IsTestProject>true</IsTestProject></PropertyGroup>
+<JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+    <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.4.0</JellyfinVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><IsTestProject>true</IsTestProject></PropertyGroup>
 <ItemGroup>
 <ProjectReference Include="../Jellyfin.Plugin.TorrServer/Jellyfin.Plugin.TorrServer.csproj" />
 <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" />

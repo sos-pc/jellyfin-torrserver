@@ -14,7 +14,16 @@ if not info['StartupWizardCompleted']:
     call('/Startup/User',{'Name':'plugin-smoke','Password':'local-fixture-password'})
     call('/Startup/Complete',{})
 login=call('/Users/AuthenticateByName',{'Username':'plugin-smoke','Pw':'local-fixture-password'},{'Authorization':'MediaBrowser Client="Plugin tests", Device="Local", DeviceId="fixture", Version="1"'})
-headers={'X-Emby-Token':login['AccessToken']}
+headers={'Authorization':'MediaBrowser Client="Plugin tests", Device="Local", DeviceId="fixture", Version="1", Token="'+login['AccessToken']+'"'}
+if os.environ.get('JELLYFIN_SMOKE_INSTALL') == '1':
+    repository='https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/manifest.json'
+    call('/Repositories',[{'Name':'TorrServer test','Url':repository,'Enabled':True}],headers=headers)
+    packages=call('/Packages',headers=headers)
+    package=next(p for p in packages if p['name']=='TorrServer')
+    assert package['versions'][0]['version']==os.environ.get('JELLYFIN_SMOKE_VERSION','0.1.0.2')
+    call('/Packages/Installed/TorrServer?assemblyGuid=655fbf1b-525b-4f82-bdeb-f27dd0bdd606&version='+os.environ.get('JELLYFIN_SMOKE_VERSION','0.1.0.2'),{},headers=headers)
+    print('PASS: Jellyfin downloaded, checked and installed the remote package; restart the test server, then rerun without JELLYFIN_SMOKE_INSTALL.')
+    raise SystemExit(0)
 plugins=call('/Plugins',headers=headers)
 plugin=next(p for p in plugins if p['Id'].replace('-','')=='655fbf1b525b4f82bdebf27dd0bdd606')
 assert plugin['Status']=='Active',plugin

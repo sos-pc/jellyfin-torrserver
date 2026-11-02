@@ -14,7 +14,7 @@ https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/manifest.
 
 Ouvrir le catalogue des extensions, installer **TorrServer**, redémarrer Jellyfin, puis ouvrir sa page de configuration. Le JSON référence des archives versionnées et leur checksum MD5 exigé par Jellyfin ; une empreinte SHA-256 est aussi fournie dans `dist/`.
 
-Versions ciblées : **Jellyfin 10.10.7** (.NET 8, plugin 0.1.0.0) et **Jellyfin 10.11.11** (.NET 9, plugin 0.1.0.1). Les autres versions n'ont pas été validées. Le catalogue choisit la version compatible selon l'ABI annoncée.
+Versions ciblées : **Jellyfin 10.10.7** (.NET 8, plugin 0.1.0.0) **Jellyfin 10.11.11** (.NET 9, plugin 0.1.0.1) et **Jellyfin 12.4** (.NET 10, plugin 0.1.0.2). Les autres versions n'ont pas été validées. Le catalogue choisit la version compatible selon l'ABI annoncée.
 
 ## Configuration après installation
 
@@ -43,7 +43,7 @@ Le catalogue est classé R et respecte les restrictions d'accès aux chaînes de
 
 ## Développement et validation
 
-Installer les SDK .NET 8 et 9, puis :
+Installer les SDK .NET 8, 9 et 10, puis :
 
 ```sh
 dotnet test tests/TorrServer.Tests.csproj -c Release
@@ -53,3 +53,5 @@ python3 scripts/package.py
 Les tests utilisent des réponses contrôlées pour TMDB, Prowlarr et TorrServer : parcours de sélection d'un pack et d'un fichier, persistance, correspondance d'épisodes, upload `.torrent`, authentification, annulation, jetons de lecture et relais Range. Ces tests ne prouvent pas la disponibilité des indexeurs ou des pairs réels.
 
 `tests/jellyfin_smoke.py` vérifie un serveur Jellyfin **de test isolé** sur `127.0.0.1:18196` (ou `JELLYFIN_SMOKE_URL`) : initialisation du serveur, chargement du plugin, configuration et dossiers natifs du catalogue. Ne pas l'utiliser sur une installation personnelle existante. Les clés personnelles et une lecture avec vos indexeurs réels ne sont pas incluses dans les tests.
+
+Pour tester l'installation depuis le JSON public sur un serveur de test vierge : exécuter `tests/jellyfin_smoke.py` avec `JELLYFIN_SMOKE_INSTALL=1`, redémarrer ce serveur, puis relancer le script sans cette variable. Le test remplace la liste des dépôts du serveur de test. Le paquet par défaut est 0.1.0.2 (Jellyfin 12.4) ; `JELLYFIN_SMOKE_VERSION` permet d'en sélectionner un autre.
