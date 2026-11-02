@@ -9,28 +9,28 @@
     "imageUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/assets/logo.png",
     "versions": [
       {
-        "version": "0.1.0.2",
+        "version": "0.1.1.2",
         "targetAbi": "12.4.0.0",
         "changelog": "Catalogue TMDB, choix manuel des torrents et fichiers, lecture TorrServer et configuration.",
-        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.0.2.zip",
-        "checksum": "e77d4fb2dbfd329c61b394736d79c54f",
-        "timestamp": "2026-11-02T09:15:50.949941+00:00"
+        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.1.2.zip",
+        "checksum": "c56b4a05d1935d34fea13aacad16769e",
+        "timestamp": "2026-11-02T09:28:23.160019+00:00"
       },
       {
-        "version": "0.1.0.1",
+        "version": "0.1.1.1",
         "targetAbi": "10.11.11.0",
         "changelog": "Catalogue TMDB, choix manuel des torrents et fichiers, lecture TorrServer et configuration.",
-        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.0.1.zip",
-        "checksum": "0d5643f4922c702785a0ee2d8d000626",
-        "timestamp": "2026-11-02T09:15:50.952451+00:00"
+        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.1.1.zip",
+        "checksum": "71b72455173303b972f973e011044864",
+        "timestamp": "2026-11-02T09:28:23.236285+00:00"
       },
       {
-        "version": "0.1.0.0",
+        "version": "0.1.1.0",
         "targetAbi": "10.10.7.0",
         "changelog": "Catalogue TMDB, choix manuel des torrents et fichiers, lecture TorrServer et configuration.",
-        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.0.0.zip",
-        "checksum": "277366827b96de01934032dd54aadd81",
-        "timestamp": "2026-11-02T09:15:50.954663+00:00"
+        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.1.0.zip",
+        "checksum": "9f47c60861a62924c25d1bf5ab127a72",
+        "timestamp": "2026-11-02T09:28:23.318685+00:00"
       }
     ]
   }

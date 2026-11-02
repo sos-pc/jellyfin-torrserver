@@ -58,8 +58,14 @@ public sealed class Services
     }
     public async Task<JsonElement> Tmdb(string path, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(Config.TmdbApiKey)) throw new InvalidOperationException("Configurez la clé API TMDB.");
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.themoviedb.org/3/" + path + (path.Contains('?') ? "&" : "?") + "language=fr-FR&api_key=" + Uri.EscapeDataString(Config.TmdbApiKey));
+        var token = Config.TmdbReadAccessToken.Trim();
+        if (token.Length == 0) token = (Environment.GetEnvironmentVariable("TMBD_API_LECTURE") ?? Environment.GetEnvironmentVariable("TMDB_API_LECTURE") ?? "").Trim();
+        var key = Config.TmdbApiKey.Trim();
+        if (token.Length == 0 && key.Length == 0) throw new InvalidOperationException("Configurez une clé API TMDB ou un jeton de lecture TMDB.");
+        var url = "https://api.themoviedb.org/3/" + path + (path.Contains('?') ? "&" : "?") + "language=fr-FR";
+        if (token.Length == 0) url += "&api_key=" + Uri.EscapeDataString(key);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (token.Length > 0) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await Send(request, ct);
     }
     public async Task<IReadOnlyList<Release>> Search(string query, CancellationToken ct)

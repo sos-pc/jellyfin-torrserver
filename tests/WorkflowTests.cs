@@ -120,6 +120,30 @@ public sealed class WorkflowTests : IDisposable
         using var cancel = new CancellationTokenSource(50);
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Make(_ => "{\"hash\":\"abc\",\"file_stats\":[]}").Prepare(new("x", "Film", "magnet:?xt=urn:btih:abc", 1, 4, "fixture"), cancel.Token));
     }
+    [Fact]
+    public async Task ReadTokenUsesBearerHeaderWithoutLeakingIntoUrl()
+    {
+        _config.TmdbReadAccessToken = "read-only-fixture-token";
+        var services = Make(request =>
+        {
+            Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
+            Assert.Equal("read-only-fixture-token", request.Headers.Authorization?.Parameter);
+            Assert.DoesNotContain("api_key", request.RequestUri!.Query);
+            Assert.DoesNotContain("read-only-fixture-token", request.RequestUri.AbsoluteUri);
+            return "{\"results\":[]}";
+        });
+        await services.Tmdb("movie/popular?page=1", default);
+    }
+    [Fact]
+    public async Task LegacyV3KeyStillWorks()
+    {
+        await Make(request =>
+        {
+            Assert.Null(request.Headers.Authorization);
+            Assert.Contains("api_key=tmdb-test", request.RequestUri!.Query);
+            return "{}";
+        }).Tmdb("configuration", default);
+    }
     public void Dispose() { if (Directory.Exists(_directory)) Directory.Delete(_directory, true); }
     public class ProbeProxy : DispatchProxy
     {

@@ -14,11 +14,11 @@ https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/manifest.
 
 Ouvrir le catalogue des extensions, installer **TorrServer**, redémarrer Jellyfin, puis ouvrir sa page de configuration. Le JSON référence des archives versionnées et leur checksum MD5 exigé par Jellyfin ; une empreinte SHA-256 est aussi fournie dans `dist/`.
 
-Versions ciblées : **Jellyfin 10.10.7** (.NET 8, plugin 0.1.0.0) **Jellyfin 10.11.11** (.NET 9, plugin 0.1.0.1) et **Jellyfin 12.4** (.NET 10, plugin 0.1.0.2). Les autres versions n'ont pas été validées. Le catalogue choisit la version compatible selon l'ABI annoncée.
+Versions ciblées : **Jellyfin 10.10.7** (.NET 8, plugin 0.1.1.0) **Jellyfin 10.11.11** (.NET 9, plugin 0.1.1.1) et **Jellyfin 12.4** (.NET 10, plugin 0.1.1.2). Les autres versions n'ont pas été validées. Le catalogue choisit la version compatible selon l'ABI annoncée.
 
 ## Configuration après installation
 
-- Clé API **TMDB v3**, fournie par votre compte TMDB (ne pas utiliser un jeton Bearer à sa place).
+- Clé API **TMDB v3** ou **jeton de lecture TMDB**. Saisir le jeton brut dans son champ dédié (sans préfixe `Bearer`) ; il est prioritaire sur la clé v3. Si le champ est vide, les variables serveur `TMBD_API_LECTURE` puis `TMDB_API_LECTURE` sont également prises en charge.
 - Adresse de **Prowlarr** et sa clé API ; les indexeurs de torrents doivent être configurés et accessibles dans Prowlarr.
 - Adresse de **TorrServer**, avec utilisateur/mot de passe facultatifs si son authentification est activée.
 - Adresse interne de Jellyfin : conserver `http://127.0.0.1:8096` sauf port personnalisé, HTTPS uniquement ou chemin de base. Le serveur Jellyfin et FFmpeg doivent pouvoir atteindre cette adresse.
@@ -54,6 +54,6 @@ Les tests utilisent des réponses contrôlées pour TMDB, Prowlarr et TorrServer
 
 `tests/jellyfin_smoke.py` vérifie un serveur Jellyfin **de test isolé** sur `127.0.0.1:18196` (ou `JELLYFIN_SMOKE_URL`) : initialisation du serveur, chargement du plugin, configuration et dossiers natifs du catalogue. Ne pas l'utiliser sur une installation personnelle existante. Les clés personnelles et une lecture avec vos indexeurs réels ne sont pas incluses dans les tests.
 
-Pour tester l'installation depuis le JSON public sur un serveur de test vierge : exécuter `tests/jellyfin_smoke.py` avec `JELLYFIN_SMOKE_INSTALL=1`, redémarrer ce serveur, puis relancer le script sans cette variable. Le test remplace la liste des dépôts du serveur de test. Le paquet par défaut est 0.1.0.2 (Jellyfin 12.4) ; `JELLYFIN_SMOKE_VERSION` permet d'en sélectionner un autre.
+Pour tester l'installation depuis le JSON public sur un serveur de test vierge : exécuter `tests/jellyfin_smoke.py` avec `JELLYFIN_SMOKE_INSTALL=1`, redémarrer ce serveur, puis relancer le script sans cette variable. Le test remplace la liste des dépôts du serveur de test. Le paquet par défaut est 0.1.1.2 (Jellyfin 12.4) ; `JELLYFIN_SMOKE_VERSION` permet d'en sélectionner un autre.
 
-Validation effectuée : 12 tests automatisés par cible (.NET 8, 9 et 10), chargement du plugin et de sa configuration dans Jellyfin 10.10.7, 10.11.11 et 12.4.0, installation depuis le dépôt JSON public dans 10.11.11 et 12.4.0, puis vérification après redémarrage. La lecture avec des indexeurs et des pairs réels reste à vérifier avec votre configuration.
+Validation effectuée : 14 tests automatisés par cible (.NET 8, 9 et 10), chargement du plugin et de sa configuration dans Jellyfin 10.10.7, 10.11.11 et 12.4.0, installation depuis le dépôt JSON public dans 10.11.11 et 12.4.0, puis vérification après redémarrage. La lecture avec des indexeurs et des pairs réels reste à vérifier avec votre configuration.

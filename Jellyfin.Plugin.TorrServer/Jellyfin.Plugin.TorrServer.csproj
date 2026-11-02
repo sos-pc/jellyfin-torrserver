@@ -1,12 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.1.0.0</Version>
+    <Version>0.1.1.0</Version>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <JellyfinVersion Condition="'$(TargetFramework)' == 'net8.0'">10.10.7</JellyfinVersion>
     <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
     <JellyfinVersion Condition="'$(TargetFramework)' == 'net10.0'">12.4.0</JellyfinVersion>
-    <Version Condition="'$(TargetFramework)' == 'net9.0'">0.1.0.1</Version>
-    <Version Condition="'$(TargetFramework)' == 'net10.0'">0.1.0.2</Version>
+    <Version Condition="'$(TargetFramework)' == 'net9.0'">0.1.1.1</Version>
+    <Version Condition="'$(TargetFramework)' == 'net10.0'">0.1.1.2</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

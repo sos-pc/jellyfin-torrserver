@@ -20,6 +20,7 @@ public sealed class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 public sealed class PluginConfiguration : BasePluginConfiguration
 {
     public string JellyfinInternalUrl { get; set; } = "http://127.0.0.1:8096";
+    public string TmdbReadAccessToken { get; set; } = "";
     public string TmdbApiKey { get; set; } = "";
     public string ProwlarrUrl { get; set; } = "";
     public string ProwlarrApiKey { get; set; } = "";

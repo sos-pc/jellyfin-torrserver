@@ -11,7 +11,7 @@ base = 'https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/'
 dist = root / 'dist'
 dist.mkdir(exist_ok=True)
 versions = []
-for framework, version, abi in [('net10.0', '0.1.0.2', '12.4.0.0'), ('net9.0', '0.1.0.1', '10.11.11.0'), ('net8.0', '0.1.0.0', '10.10.7.0')]:
+for framework, version, abi in [('net10.0', '0.1.1.2', '12.4.0.0'), ('net9.0', '0.1.1.1', '10.11.11.0'), ('net8.0', '0.1.1.0', '10.10.7.0')]:
     dll = root / 'Jellyfin.Plugin.TorrServer/bin/Release' / framework / 'Jellyfin.Plugin.TorrServer.dll'
     if not dll.is_file():
         raise SystemExit('Compile all targets with dotnet build -c Release first.')
