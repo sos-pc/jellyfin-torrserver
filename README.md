@@ -6,7 +6,7 @@ Plugin serveur Jellyfin : parcourir les affiches TMDB sans télécharger les fil
 
 ## Captures réelles de l’interface
 
-Captures prises dans Jellyfin **12.4**, avec le plugin **0.1.1.2**. Les identifiants ne sont pas renseignés sur ces captures : le catalogue montre son entrée Films/Séries, pas encore les affiches de TMDB.
+Captures réelles prises dans Jellyfin **12.4**, avec le plugin **0.1.1.2**. La clé TMDB a été vérifiée : les listes ci-dessous contiennent de vraies affiches. Le nom du serveur visible est un identifiant de conteneur de test, pas celui d’un serveur personnel. Les clés ne sont pas montrées.
 
 ### Configuration du plugin
 
@@ -19,6 +19,20 @@ Captures prises dans Jellyfin **12.4**, avec le plugin **0.1.1.2**. Les identifi
 ### Entrée du catalogue
 
 ![Dossiers Films populaires et Séries populaires](docs/screenshots/catalogue.png)
+
+### Films : affiches réelles
+
+![Films populaires chargés depuis TMDB dans Jellyfin](docs/screenshots/films.png)
+
+### Séries : affiches réelles
+
+![Séries populaires chargées depuis TMDB dans Jellyfin](docs/screenshots/series.png)
+
+### Simulation des options de lecture
+
+Cette illustration générée montre le choix d’une source et d’un fichier avec des données fictives. Ce dialogue n’est pas un écran implémenté : le plugin actuel utilise les dossiers et les écrans natifs de Jellyfin. Aucune recherche Prowlarr ni lecture TorrServer réelle n’a été lancée pour cette image.
+
+![Simulation du choix de source et de la lecture](docs/screenshots/simulation-lecture.png)
 
 ## Installation
 
