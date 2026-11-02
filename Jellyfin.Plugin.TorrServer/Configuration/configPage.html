@@ -5,25 +5,36 @@
 <div id="TorrServerConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
   <div data-role="content"><div class="content-primary">
     <h2>Configuration de TorrServer</h2>
-    <p>Cette version est en cours de développement : le catalogue et la lecture ne sont pas encore disponibles.</p>
+    <p>Ouvrez Catalogue TMDB dans Jellyfin, choisissez un film ou un épisode, puis un torrent et un fichier. Les clés et adresses sont utilisées par le serveur Jellyfin.</p>
     <form id="TorrServerConfigForm">
       <div class="inputContainer"><label class="inputLabel" for="TmdbApiKey">Clé API TMDB</label><input is="emby-input" id="TmdbApiKey" type="password" autocomplete="off"></div>
       <div class="inputContainer"><label class="inputLabel" for="ProwlarrUrl">Adresse de Prowlarr</label><input is="emby-input" id="ProwlarrUrl" type="url" placeholder="http://prowlarr:9696"></div>
       <div class="inputContainer"><label class="inputLabel" for="ProwlarrApiKey">Clé API Prowlarr</label><input is="emby-input" id="ProwlarrApiKey" type="password" autocomplete="off"></div>
       <div class="inputContainer"><label class="inputLabel" for="TorrServerUrl">Adresse de TorrServer</label><input is="emby-input" id="TorrServerUrl" type="url" placeholder="http://torrserver:8090"></div>
+      <div class="inputContainer"><label class="inputLabel" for="TorrServerUsername">Utilisateur TorrServer (facultatif)</label><input is="emby-input" id="TorrServerUsername" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="TorrServerPassword">Mot de passe TorrServer</label><input is="emby-input" id="TorrServerPassword" type="password" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="JellyfinInternalUrl">Adresse interne de Jellyfin</label><input is="emby-input" id="JellyfinInternalUrl" type="url"><div class="fieldDescription">Laisser http://127.0.0.1:8096 par défaut. Ajouter le chemin de base si Jellyfin en utilise un.</div></div>
       <button is="emby-button" type="submit" class="raised button-submit block"><span>Enregistrer</span></button>
+      <button is="emby-button" type="button" id="TestConnections" class="raised block"><span>Tester les connexions enregistrées</span></button>
+      <pre id="ConnectionResults" aria-live="polite"></pre>
     </form>
   </div></div>
   <script>
     (function () {
       const page = document.querySelector('#TorrServerConfigPage');
       const id = '655fbf1b-525b-4f82-bdeb-f27dd0bdd606';
-      const fields = ['TmdbApiKey', 'ProwlarrUrl', 'ProwlarrApiKey', 'TorrServerUrl'];
+      const fields = ['TmdbApiKey', 'ProwlarrUrl', 'ProwlarrApiKey', 'TorrServerUrl', 'TorrServerUsername', 'TorrServerPassword', 'JellyfinInternalUrl'];
       page.addEventListener('pageshow', function () {
         Dashboard.showLoadingMsg();
         ApiClient.getPluginConfiguration(id).then(function (config) {
           fields.forEach(function (field) { page.querySelector('#' + field).value = config[field] || ''; });
-        }).finally(function () { Dashboard.hideLoadingMsg(); });
+        }).catch(function () { Dashboard.alert('Impossible de charger la configuration.'); }).finally(function () { Dashboard.hideLoadingMsg(); });
+      });
+      page.querySelector('#TestConnections').addEventListener('click', function () {
+        const button = this; button.disabled = true;
+        ApiClient.ajax({ type: 'POST', url: ApiClient.getUrl('TorrServerPlugin/connections'), dataType: 'json' }).then(function (result) {
+          page.querySelector('#ConnectionResults').textContent = Object.keys(result).map(function (key) { return key + ' : ' + result[key]; }).join('\n');
+        }).catch(function () { page.querySelector('#ConnectionResults').textContent = 'Impossible de tester les connexions.'; }).finally(function () { button.disabled = false; });
       });
       page.querySelector('#TorrServerConfigForm').addEventListener('submit', function (event) {
         event.preventDefault();

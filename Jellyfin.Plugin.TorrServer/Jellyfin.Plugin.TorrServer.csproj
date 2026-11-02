@@ -1,15 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <Version>0.1.0.0</Version>
+    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <JellyfinVersion Condition="'$(TargetFramework)' == 'net8.0'">10.10.7</JellyfinVersion>
+    <JellyfinVersion Condition="'$(TargetFramework)' == 'net9.0'">10.11.11</JellyfinVersion>
+    <Version Condition="'$(TargetFramework)' == 'net9.0'">0.1.0.1</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" ExcludeAssets="runtime" />
-    <PackageReference Include="Jellyfin.Model" Version="10.10.7" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinVersion)" ExcludeAssets="runtime" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Configuration/configPage.html" />
+    <EmbeddedResource Include="../assets/logo.png" LogicalName="Jellyfin.Plugin.TorrServer.logo.png" />
   </ItemGroup>
 </Project>

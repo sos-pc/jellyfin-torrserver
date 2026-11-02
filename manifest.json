@@ -1,0 +1,29 @@
+[
+  {
+    "guid": "655fbf1b-525b-4f82-bdeb-f27dd0bdd606",
+    "name": "TorrServer",
+    "owner": "jonathan-pp",
+    "category": "Channels",
+    "overview": "Catalogue TMDB et lecture de torrents avec choix de la source.",
+    "description": "Catalogue TMDB, recherche Prowlarr, choix des torrents et fichiers, lecture TorrServer. Configurer les services après installation. Versions testées : Jellyfin 10.10.7 et 10.11.11.",
+    "imageUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/assets/logo.png",
+    "versions": [
+      {
+        "version": "0.1.0.1",
+        "targetAbi": "10.11.11.0",
+        "changelog": "Catalogue TMDB, choix manuel des torrents et fichiers, lecture TorrServer et configuration.",
+        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.0.1.zip",
+        "checksum": "0d5643f4922c702785a0ee2d8d000626",
+        "timestamp": "2026-11-02T09:10:24.090683+00:00"
+      },
+      {
+        "version": "0.1.0.0",
+        "targetAbi": "10.10.7.0",
+        "changelog": "Catalogue TMDB, choix manuel des torrents et fichiers, lecture TorrServer et configuration.",
+        "sourceUrl": "https://raw.githubusercontent.com/jonathan-pp/jellyfin-torrserver/main/dist/TorrServer-0.1.0.0.zip",
+        "checksum": "277366827b96de01934032dd54aadd81",
+        "timestamp": "2026-11-02T09:10:24.164891+00:00"
+      }
+    ]
+  }
+]
