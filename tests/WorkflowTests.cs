@@ -1,6 +1,7 @@
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
@@ -11,6 +12,7 @@ using Jellyfin.Plugin.TorrServer;
 
 public sealed class WorkflowTests : IDisposable
 {
+    private const string PublicIndexer = "[{\"id\":7,\"enable\":true,\"privacy\":\"public\",\"protocol\":\"torrent\"}]";
     private readonly string _directory = Path.Combine(Path.GetTempPath(), "ts-test-" + Guid.NewGuid());
     private readonly PluginConfiguration _config = new() { TmdbApiKey = "tmdb-test", ProwlarrUrl = "http://prowlarr/base", ProwlarrApiKey = "private-key", TorrServerUrl = "http://torrent/base", TorrServerUsername = "user", TorrServerPassword = "password" };
     private readonly List<string> _requests = [];
@@ -22,7 +24,7 @@ public sealed class WorkflowTests : IDisposable
         if (request.RequestUri!.Host == "torrent") Assert.Equal("Basic", request.Headers.Authorization?.Scheme);
         if (request.RequestUri!.Host == "external") Assert.False(request.Headers.Contains("X-Api-Key"));
         if (request.Content is not null) _bodies.Add(await request.Content.ReadAsStringAsync());
-        var body = handle?.Invoke(request) ?? (url.Contains("themoviedb") ? "{\"name\":\"Test Show\",\"original_name\":\"Test Show\"}" : url.Contains("prowlarr") ? "[{\"protocol\":\"torrent\",\"title\":\"Test.Show.S02.Complete\",\"magnetUrl\":\"magnet:?xt=urn:btih:abc\",\"seeders\":23,\"size\":1024,\"indexer\":\"Fixture\"}]" : "{\"hash\":\"abc\",\"file_stats\":[{\"id\":1,\"path\":\"Show.S02E03.mkv\",\"length\":1234},{\"id\":2,\"path\":\"Show.S02E04.mkv\",\"length\":4567},{\"id\":3,\"path\":\"readme.txt\",\"length\":3}]}");
+        var body = handle?.Invoke(request) ?? (url.Contains("themoviedb") ? "{\"name\":\"Test Show\",\"original_name\":\"Test Show\"}" : url.Contains("api/v1/indexer") ? PublicIndexer : url.Contains("prowlarr") ? "[{\"protocol\":\"torrent\",\"indexerId\":7,\"title\":\"Test.Show.S02.Complete\",\"magnetUrl\":\"magnet:?xt=urn:btih:abc\",\"seeders\":23,\"size\":1024,\"indexer\":\"Fixture\"}]" : "{\"hash\":\"abc\",\"file_stats\":[{\"id\":1,\"path\":\"Show.S02E03.mkv\",\"length\":1234},{\"id\":2,\"path\":\"Show.S02E04.mkv\",\"length\":4567},{\"id\":3,\"path\":\"readme.txt\",\"length\":3}]}");
         return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     }), () => _config);
 
@@ -38,7 +40,7 @@ public sealed class WorkflowTests : IDisposable
         Assert.Empty(_requests);
         var results = await channel.GetChannelItems(new() { FolderId = scopes.Items[1].Id }, default);
         Assert.Single(results.Items);
-        Assert.Contains("Test%20Show%20S02", _requests.Single(x => x.Contains("prowlarr")));
+        Assert.Contains("Test%20Show%20S02", _requests.Single(x => x.Contains("api/v1/search")));
         var files = await channel.GetChannelItems(new() { FolderId = results.Items[0].Id }, default);
         Assert.Equal(2, files.Items.Count);
         Assert.Contains(_bodies, x => x.Contains("save_to_db"));
@@ -74,8 +76,45 @@ public sealed class WorkflowTests : IDisposable
     [Fact]
     public async Task NullSeedersAndUsenetAreHandled()
     {
-        var results = await Make(_ => "[{\"protocol\":\"usenet\",\"downloadUrl\":\"http://bad\"},{\"protocol\":\"torrent\",\"seeders\":null,\"size\":null,\"downloadUrl\":\"http://file\"}]").Search("test", default);
+        var results = await Make(request => request.RequestUri!.AbsoluteUri.Contains("api/v1/indexer") ? PublicIndexer : "[{\"protocol\":\"usenet\",\"indexerId\":7,\"downloadUrl\":\"http://bad\"},{\"protocol\":\"torrent\",\"indexerId\":7,\"seeders\":null,\"size\":null,\"downloadUrl\":\"http://file\"}]").Search("test", default);
         Assert.Equal(0, Assert.Single(results).Seeders);
+    }
+    [Fact]
+    public async Task SearchOnlyUsesEnabledPublicTorrentIndexers()
+    {
+        var results = await Make(request => request.RequestUri!.AbsoluteUri.Contains("api/v1/indexer")
+            ? "[{\"id\":7,\"enable\":true,\"privacy\":\"public\",\"protocol\":\"torrent\"},{\"id\":8,\"enable\":false,\"privacy\":\"public\",\"protocol\":\"torrent\"},{\"id\":9,\"enable\":true,\"privacy\":\"private\",\"protocol\":\"torrent\"},{\"id\":10,\"enable\":true,\"privacy\":\"semiPrivate\",\"protocol\":\"torrent\"},{\"id\":11,\"enable\":true,\"privacy\":\"public\",\"protocol\":\"usenet\"}]"
+            : "[{\"protocol\":\"torrent\",\"indexerId\":7,\"downloadUrl\":\"http://public\"},{\"protocol\":\"torrent\",\"indexerId\":9,\"downloadUrl\":\"http://private\"},{\"protocol\":\"torrent\",\"downloadUrl\":\"http://unknown\"}]").Search("test", default);
+        var search = _requests.Single(x => x.Contains("api/v1/search"));
+        Assert.Contains("indexerIds=7", search);
+        Assert.All(new[] { 8, 9, 10, 11 }, id => Assert.DoesNotContain("indexerIds=" + id, search));
+        Assert.Equal("http://public", Assert.Single(results).Link);
+    }
+    [Fact]
+    public async Task SearchIsRefusedWithoutPublicIndexer()
+    {
+        var services = Make(_ => "[{\"id\":9,\"enable\":true,\"privacy\":\"private\",\"protocol\":\"torrent\"}]");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => services.Search("test", default));
+        Assert.DoesNotContain(_requests, x => x.Contains("api/v1/search"));
+    }
+    [Fact]
+    public async Task ProwlarrRedirectToMagnetIsAddedAsMagnet()
+    {
+        const string magnet = "magnet:?xt=urn:btih:abc&dn=Film%202010";
+        var services = new Services(new Factory(async request =>
+        {
+            _requests.Add(request.RequestUri!.AbsoluteUri);
+            if (request.Content is not null) _bodies.Add(await request.Content.ReadAsStringAsync());
+            if (request.RequestUri.Host != "prowlarr") return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"hash\":\"abc\",\"file_stats\":[{\"id\":1,\"path\":\"film.mkv\",\"length\":42}]}", Encoding.UTF8, "application/json") };
+            Assert.Equal("private-key", request.Headers.GetValues("X-Api-Key").Single());
+            var redirect = new HttpResponseMessage(HttpStatusCode.MovedPermanently);
+            redirect.Headers.Location = new Uri(magnet);
+            return redirect;
+        }), () => _config);
+        var status = await services.Prepare(new("x", "Film", "http://prowlarr/base/12/download?link=abc", 1, 4, "fixture"), default);
+        Assert.Equal("abc", status.Hash);
+        Assert.Equal(magnet, JsonDocument.Parse(_bodies.Single()).RootElement.GetProperty("link").GetString());
+        Assert.DoesNotContain(_requests, x => x.Contains("torrent/upload"));
     }
     [Fact]
     public async Task StoreRejectsTraversal() => await Assert.ThrowsAsync<ArgumentException>(() => new SelectionStore(() => _directory).Load("../secrets", default));
