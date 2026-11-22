@@ -108,6 +108,19 @@ public sealed class QbitClient
         while (!PieceMath.AllDownloaded(await PieceStates(file.Hash, ct), first, last)) await Task.Delay(500, ct);
     }
 
+    /// <summary>Like <see cref="WaitForBytes"/>, but gives up after <paramref name="wait"/>: false when the bytes are still missing.</summary>
+    public async Task<bool> BytesArrive(QbitFileLocation file, long start, long end, TimeSpan wait, CancellationToken ct)
+    {
+        var (first, last) = PieceMath.Covering(file, start, end);
+        var deadline = DateTime.UtcNow + wait;
+        while (!PieceMath.AllDownloaded(await PieceStates(file.Hash, ct), first, last))
+        {
+            if (DateTime.UtcNow >= deadline) return false;
+            await Task.Delay(TimeSpan.FromMilliseconds(Math.Min(500, Math.Max(1, wait.TotalMilliseconds / 4))), ct);
+        }
+        return true;
+    }
+
     public async Task<int[]> PieceStates(string hash, CancellationToken ct)
     {
         hash = NormalizeHash(hash);

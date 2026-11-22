@@ -17,7 +17,6 @@ namespace Jellyfin.Plugin.TorrServer;
 /// </summary>
 public sealed class DownloadsChannel : IChannel, IRequiresMediaInfoCallback, IHasCacheKey
 {
-    private const long HeadAndTail = 4 * 1024 * 1024;
     private readonly DownloadCatalog _catalog;
     private readonly DownloadTickets _tickets;
     private readonly IMediaSourceManager _media;
@@ -47,20 +46,19 @@ public sealed class DownloadsChannel : IChannel, IRequiresMediaInfoCallback, IHa
         var items = new List<ChannelItemInfo>();
         if (id == "")
         {
+            // Jellyfin never renames a video of a channel once created, only a folder: each download is a folder whose
+            // name carries its live progress, and its videos keep stable names (and their watch state).
             foreach (var (entry, torrent) in downloads)
-            {
-                // A single-file torrent opens straight on its video; a pack opens on its list of videos.
-                if (Services.IsVideo(torrent.ContentPath)) items.Add(Video(entry, torrent, $"file:{entry.Hash}:0", Label(entry), Overview(entry, torrent, torrent.Progress)));
-                else items.Add(new ChannelItemInfo { Id = $"torrent:{entry.Hash}", Name = Label(entry), Overview = Overview(entry, torrent, torrent.Progress), ImageUrl = entry.Poster, Type = ChannelItemType.Folder, FolderType = ChannelFolderType.Container });
-            }
+                items.Add(new ChannelItemInfo { Id = $"torrent:{entry.Hash}", Name = FolderName(entry, torrent), Overview = entry.Release, ImageUrl = entry.Poster, Type = ChannelItemType.Folder, FolderType = ChannelFolderType.Container });
             return Result(items);
         }
         var parts = id.Split(':');
         if (parts.Length != 2 || parts[0] != "torrent") throw new ArgumentException("Dossier invalide.");
-        var (owner, state) = downloads.FirstOrDefault(x => x.Entry.Hash == QbitClient.NormalizeHash(parts[1]));
+        var (owner, _) = downloads.FirstOrDefault(x => x.Entry.Hash == QbitClient.NormalizeHash(parts[1]));
         if (owner is null) return Result(items);
-        foreach (var file in (await _catalog.Qbit.Files(owner.Hash, ct)).Where(f => f.Priority > 0 && Services.IsVideo(f.Name)).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
-            items.Add(Video(owner, state, $"file:{owner.Hash}:{file.Index}", FileLabel(owner, file), Overview(owner, state, file.Progress)));
+        var videos = (await _catalog.Qbit.Files(owner.Hash, ct)).Where(f => f.Priority > 0 && Services.IsVideo(f.Name)).OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        foreach (var file in videos)
+            items.Add(Video(owner, $"file:{owner.Hash}:{file.Index}", owner.IsMovie && videos.Count == 1 ? owner.Title : FileLabel(owner, file)));
         return Result(items);
     }
 
@@ -72,19 +70,30 @@ public sealed class DownloadsChannel : IChannel, IRequiresMediaInfoCallback, IHa
         var file = await qbit.Locate(parts[1], index, ct);
         // A complete file needs nothing from qBittorrent; one still arriving is brought first.
         if (file.File.Progress < 1) await qbit.Prioritize(file.Hash, index, ct);
-        // Containers keep their index at the start and often at the end: both must be there before Jellyfin probes the file.
+        // The start of the file must be there before Jellyfin probes it; its end only for an MP4 that keeps its index there.
         using (var wait = CancellationTokenSource.CreateLinkedTokenSource(ct))
         {
             wait.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(_config().DownloadStartTimeoutSeconds, 1, 600)));
+            var size = file.File.Size;
+            var head = Containers.HeadSize(size);
             try
             {
-                var size = file.File.Size;
-                await qbit.WaitForBytes(file, 0, Math.Min(size, HeadAndTail) - 1, wait.Token);
-                await qbit.WaitForBytes(file, Math.Max(0, size - HeadAndTail), size - 1, wait.Token);
+                await qbit.WaitForBytes(file, 0, head - 1, wait.Token);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                throw new InvalidOperationException("Le début et la fin du fichier ne sont pas encore téléchargés. Réessayez dans une minute.");
+                throw new InvalidOperationException("Le début du fichier n'est pas encore téléchargé. Réessayez dans une minute.");
+            }
+            if (Containers.NeedsTail(file.File.Name, await Containers.ReadStart(file.Path, (int)Math.Min(head, 1024 * 1024), ct)))
+            {
+                try
+                {
+                    await qbit.WaitForBytes(file, Math.Max(0, size - head), size - 1, wait.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new InvalidOperationException("Ce MP4 range son index à la fin du fichier, qui n'est pas encore téléchargée. Réessayez dans une minute.");
+                }
             }
         }
         var source = new MediaSourceInfo
@@ -112,20 +121,22 @@ public sealed class DownloadsChannel : IChannel, IRequiresMediaInfoCallback, IHa
         return user is not null && _users.GetUserDto(user).Policy?.IsAdministrator == true;
     }
 
-    private static ChannelItemInfo Video(DownloadEntry entry, QbitTorrent torrent, string id, string name, string overview) => new()
+    private static ChannelItemInfo Video(DownloadEntry entry, string id, string name) => new()
     {
         Id = id,
         Name = name,
-        Overview = overview,
+        Overview = entry.Release,
         ImageUrl = entry.Poster,
         Type = ChannelItemType.Media,
         MediaType = ChannelMediaType.Video,
         ContentType = entry.IsMovie ? ChannelMediaContentType.Movie : ChannelMediaContentType.Episode,
+        // Jellyfin shows a movie's year after its name: the name stays without it.
+        ProductionYear = entry.IsMovie && entry.Year > 0 ? entry.Year : null,
     };
 
     public static string Label(DownloadEntry entry)
     {
-        var title = entry.Year > 0 && entry.IsMovie ? $"{entry.Title} ({entry.Year})" : entry.Title;
+        var title = entry.Title;
         if (entry.IsMovie || entry.Episodes.Count == 0) return title;
         if (entry.Episodes.Count == 1) return $"{title} — S{entry.Episodes[0].Season:00}E{entry.Episodes[0].Episode:00}";
         var seasons = entry.Episodes.Select(e => e.Season).Distinct().OrderBy(s => s).ToList();
@@ -142,17 +153,17 @@ public sealed class DownloadsChannel : IChannel, IRequiresMediaInfoCallback, IHa
         return known is null || known.Title.Length == 0 ? $"S{season:00}E{episode:00} — {name}" : $"S{season:00}E{episode:00} — {known.Title}";
     }
 
-    public static string Overview(DownloadEntry entry, QbitTorrent torrent, double progress)
+    /// <summary>« No Other Land (2024) · 26 % · 1,3 Mio/s · fin dans 11 min »: renamed at each listing.</summary>
+    public static string FolderName(DownloadEntry entry, QbitTorrent torrent)
     {
-        var parts = new List<string> { $"Téléchargé à {Math.Floor(progress * 100).ToString(CultureInfo.InvariantCulture)} %" };
-        if (torrent.Progress >= 1) parts.Add("téléchargement fini, en attente d'import");
+        var parts = new List<string> { entry.IsMovie && entry.Year > 0 ? $"{entry.Title} ({entry.Year})" : Label(entry), $"{Math.Floor(torrent.Progress * 100).ToString(CultureInfo.InvariantCulture)} %" };
+        if (torrent.Progress >= 1) parts.Add("fini, en attente d'import");
         else if (torrent.DownloadSpeed > 0)
         {
             parts.Add((torrent.DownloadSpeed / 1048576.0).ToString("0.0", CultureInfo.InvariantCulture).Replace('.', ',') + " Mio/s");
             if (torrent.Eta is > 0 and < 8640000) parts.Add("fin dans " + Duration(torrent.Eta));
         }
         else parts.Add(torrent.State.StartsWith("queued", StringComparison.Ordinal) ? "en attente dans qBittorrent" : torrent.State.StartsWith("stopped", StringComparison.Ordinal) || torrent.State.StartsWith("paused", StringComparison.Ordinal) ? "arrêté" : "aucune source pour l'instant");
-        parts.Add(entry.Release);
         return string.Join(" · ", parts);
     }
 

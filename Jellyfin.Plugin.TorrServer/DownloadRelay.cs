@@ -60,6 +60,12 @@ public readonly record struct ByteRange(long Start, long End, bool Partial)
 public sealed class DownloadRelayController(DownloadTickets tickets, QbitClient qbit) : ControllerBase
 {
     private const int BlockSize = 256 * 1024;
+    /// <summary>
+    /// How long a read of the optional end of a file waits before the player is told it is not there. None: ffmpeg reads
+    /// that end each time it opens the file, and while it waits the player asks for the next segments, which makes
+    /// Jellyfin restart ffmpeg again and again.
+    /// </summary>
+    public static TimeSpan OptionalTailWait { get; set; } = TimeSpan.Zero;
 
     [AllowAnonymous]
     [HttpGet("{ticket}")]
@@ -84,6 +90,17 @@ public sealed class DownloadRelayController(DownloadTickets tickets, QbitClient 
         Response.ContentLength = end - start + 1;
         if (partial) Response.Headers.ContentRange = $"bytes {start}-{end}/{size}";
         if (HttpMethods.IsHead(Request.Method)) return;
+        // At the end of a Matroska, AVI or MPEG-TS file there is only an optional index, which ffmpeg reads each time it
+        // opens the file. When that end has not arrived, the response is cut before its first byte: ffmpeg only loses that
+        // read, goes back where it was and plays without the index. A refused range (416, 404) would make it take the whole
+        // file as ended there. Anywhere else, the request waits for its bytes.
+        if (Containers.TailIsOptional(file.File.Name) && start >= size - Containers.TailSize(size)
+            && !await qbit.BytesArrive(file, start, Math.Min(end, start + BlockSize - 1), OptionalTailWait, ct))
+        {
+            await Response.StartAsync(ct);
+            HttpContext.Abort();
+            return;
+        }
 
         var buffer = new byte[BlockSize];
         var position = start;

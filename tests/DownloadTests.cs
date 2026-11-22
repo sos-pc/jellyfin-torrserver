@@ -5,6 +5,7 @@ using System.Text.Json;
 using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
 using Jellyfin.Plugin.TorrServer;
@@ -29,11 +30,95 @@ public sealed class DownloadTests : IDisposable
     private Func<int, int[]> _pieces = _ => Enumerable.Repeat(2, 7).ToArray();
     private bool _sequential = true, _firstLast = true;
     private int _moviePriority = 1;
+    private string _movieName = "film.mkv";
 
     public DownloadTests()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllBytes(Path.Combine(_directory, "film.mkv"), Enumerable.Range(0, 100).Select(i => (byte)i).ToArray());
+    }
+
+    /// <summary>A 100-byte MP4 whose top-level boxes come in the given order, the last one filling the rest.</summary>
+    private void WriteMp4(params string[] boxes)
+    {
+        _movieName = "film.mp4";
+        var bytes = new List<byte>();
+        for (var i = 0; i < boxes.Length; i++)
+        {
+            var size = i == boxes.Length - 1 ? 100 - bytes.Count : 16;
+            bytes.AddRange([0, 0, 0, (byte)size]);
+            bytes.AddRange(Encoding.ASCII.GetBytes(boxes[i]));
+            bytes.AddRange(new byte[size - 8]);
+        }
+        File.WriteAllBytes(Path.Combine(_directory, _movieName), bytes.ToArray());
+    }
+
+    [Fact]
+    public void Mp4IndexIsFoundBeforeTheMediaData()
+    {
+        static byte[] Mp4(params (string Type, uint Size)[] boxes) => boxes.SelectMany(b => new byte[] { (byte)(b.Size >> 24), (byte)(b.Size >> 16), (byte)(b.Size >> 8), (byte)b.Size }.Concat(Encoding.ASCII.GetBytes(b.Type)).Concat(new byte[Math.Max(0, (int)b.Size - 8)])).ToArray();
+        Assert.True(Containers.Mp4IndexFirst(Mp4(("ftyp", 16), ("free", 12), ("moov", 8))));
+        Assert.False(Containers.Mp4IndexFirst(Mp4(("ftyp", 16), ("mdat", 8))));
+        Assert.False(Containers.Mp4IndexFirst(Mp4(("ftyp", 16))));
+        Assert.False(Containers.Mp4IndexFirst(Mp4(("ftyp", 0))));
+        Assert.True(Containers.NeedsTail("film.mp4", Mp4(("ftyp", 16), ("mdat", 8))));
+        Assert.False(Containers.NeedsTail("film.mp4", Mp4(("ftyp", 16), ("moov", 8))));
+        Assert.False(Containers.NeedsTail("film.mkv", []));
+    }
+
+    [Fact]
+    public async Task RelayDoesNotHoldThePlayerOnTheOptionalEndOfAMatroska()
+    {
+        _pieces = _ => [2, 2, 2, 2, 2, 0, 0];
+        var tickets = new DownloadTickets();
+        var context = new DefaultHttpContext();
+        var lifetime = new Lifetime();
+        context.Features.Set<IHttpRequestLifetimeFeature>(lifetime);
+        context.Request.Method = "GET";
+        context.Request.Headers.Range = "bytes=90-";
+        context.Response.Body = new MemoryStream();
+        var controller = new DownloadRelayController(tickets, Qbit()) { ControllerContext = new ControllerContext { HttpContext = context } };
+        await controller.Play(tickets.Issue(Movie, 0), default);
+        // ffmpeg takes a 416 for the end of the whole file; a response cut before its body only fails that read.
+        Assert.Equal(206, context.Response.StatusCode);
+        Assert.True(lifetime.Aborted);
+        Assert.Equal(0, context.Response.Body.Length);
+    }
+
+    private sealed class Lifetime : IHttpRequestLifetimeFeature
+    {
+        public bool Aborted;
+        public CancellationToken RequestAborted { get; set; }
+        public void Abort() => Aborted = true;
+    }
+
+    [Fact]
+    public async Task MatroskaPlaysFromItsStartAlone()
+    {
+        _pieces = _ => [2, 2, 2, 2, 2, 0, 0];
+        var probe = DispatchProxy.Create<IMediaSourceManager, ProbeProxy>();
+        Assert.Single(await Channel(probe).GetChannelItemMediaInfo($"file:{Movie}:0", default));
+        Assert.True(((ProbeProxy)(object)probe).Probed);
+    }
+
+    [Fact]
+    public async Task Mp4WithItsIndexAtTheEndWaitsForTheEnd()
+    {
+        WriteMp4("ftyp", "mdat");
+        _pieces = _ => [2, 2, 2, 2, 2, 0, 0];
+        var probe = DispatchProxy.Create<IMediaSourceManager, ProbeProxy>();
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Channel(probe).GetChannelItemMediaInfo($"file:{Movie}:0", default));
+        Assert.Contains("index à la fin", error.Message);
+        Assert.False(((ProbeProxy)(object)probe).Probed);
+    }
+
+    [Fact]
+    public async Task FastStartMp4PlaysFromItsStartAlone()
+    {
+        WriteMp4("ftyp", "moov", "mdat");
+        _pieces = _ => [2, 2, 2, 2, 2, 0, 0];
+        var probe = DispatchProxy.Create<IMediaSourceManager, ProbeProxy>();
+        Assert.Single(await Channel(probe).GetChannelItemMediaInfo($"file:{Movie}:0", default));
     }
 
     [Theory]
@@ -147,16 +232,21 @@ public sealed class DownloadTests : IDisposable
     }
 
     [Fact]
-    public async Task ChannelOpensASingleVideoDirectlyAndAPackOnItsVideos()
+    public async Task EachDownloadIsAFolderNamedWithItsLiveProgress()
     {
         var channel = Channel(DispatchProxy.Create<IMediaSourceManager, ProbeProxy>());
         var root = await channel.GetChannelItems(new() { UserId = Guid.NewGuid() }, default);
-        var film = Assert.Single(root.Items, i => i.Id == $"file:{Movie}:0");
+        // Jellyfin renames a channel folder at each listing but never a channel video: the progress goes in folder names.
+        var filmFolder = Assert.Single(root.Items, i => i.Id == $"torrent:{Movie}");
+        Assert.Equal(ChannelItemType.Folder, filmFolder.Type);
+        Assert.Equal("Test Film (2026) · 40 % · 2,0 Mio/s · fin dans 3 min", filmFolder.Name);
+        var film = Assert.Single((await channel.GetChannelItems(new() { UserId = Guid.NewGuid(), FolderId = filmFolder.Id }, default)).Items);
+        Assert.Equal($"file:{Movie}:0", film.Id);
         Assert.Equal(ChannelItemType.Media, film.Type);
-        Assert.Equal("Test Film (2026)", film.Name);
-        Assert.StartsWith("Téléchargé à 40 % · 2,0 Mio/s · fin dans 3 min", film.Overview);
+        Assert.Equal("Test Film", film.Name);
+        Assert.Equal(2026, film.ProductionYear);
         var pack = Assert.Single(root.Items, i => i.Id == $"torrent:{Pack}");
-        Assert.Equal(ChannelItemType.Folder, pack.Type);
+        Assert.StartsWith("Test Show — S01 (2 épisodes) · 50 % · 1,0 Mio/s", pack.Name);
         var episodes = await channel.GetChannelItems(new() { UserId = Guid.NewGuid(), FolderId = pack.Id }, default);
         Assert.Equal(new[] { "S01E01 — Pilot", "S01E02 — Second" }, episodes.Items.Select(i => i.Name));
         Assert.Equal(new[] { $"file:{Pack}:1", $"file:{Pack}:0" }, episodes.Items.Select(i => i.Id));
@@ -185,7 +275,7 @@ public sealed class DownloadTests : IDisposable
         _pieces = _ => Enumerable.Repeat(0, 7).ToArray();
         var probe = DispatchProxy.Create<IMediaSourceManager, ProbeProxy>();
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => Channel(probe).GetChannelItemMediaInfo($"file:{Movie}:0", default));
-        Assert.Contains("pas encore téléchargés", error.Message);
+        Assert.Contains("pas encore téléchargé", error.Message);
         Assert.False(((ProbeProxy)(object)probe).Probed);
     }
 
@@ -217,7 +307,7 @@ public sealed class DownloadTests : IDisposable
                     "/api/v2/torrents/info" => Ok(Torrents()),
                     "/api/v2/torrents/files" => Ok(url.Query.Contains(Pack)
                         ? "[{\"index\":0,\"name\":\"Show.S01/Show.S01E02.mkv\",\"size\":50,\"progress\":0,\"priority\":1,\"piece_range\":[0,3]},{\"index\":1,\"name\":\"Show.S01/Show.S01E01.mkv\",\"size\":50,\"progress\":1,\"priority\":1,\"piece_range\":[3,6]},{\"index\":2,\"name\":\"Show.S01/notes.txt\",\"size\":1,\"progress\":1,\"priority\":1,\"piece_range\":[6,6]},{\"index\":3,\"name\":\"Show.S01/extra.mkv\",\"size\":10,\"progress\":0,\"priority\":0,\"piece_range\":[6,6]}]"
-                        : $"[{{\"index\":0,\"name\":\"film.mkv\",\"size\":100,\"progress\":0.4,\"priority\":{_moviePriority},\"piece_range\":[0,6]}}]"),
+                        : $"[{{\"index\":0,\"name\":\"{_movieName}\",\"size\":100,\"progress\":0.4,\"priority\":{_moviePriority},\"piece_range\":[0,6]}}]"),
                     "/api/v2/torrents/properties" => Ok("{\"piece_size\":16}"),
                     "/api/v2/torrents/pieceStates" => Ok(JsonSerializer.Serialize(_pieces(Interlocked.Increment(ref _pieceCalls)))),
                     "/api/v2/app/version" => Ok("v5.2.3"),
