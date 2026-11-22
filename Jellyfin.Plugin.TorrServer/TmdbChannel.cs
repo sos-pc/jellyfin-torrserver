@@ -109,8 +109,8 @@ public sealed class TmdbChannel : IChannel, IRequiresMediaInfoCallback, IHasCach
         var release = await _store.Load(parts[1], ct);
         var status = await _services.Prepare(release, ct);
         var file = status.Files!.SingleOrDefault(x => x.Id == ParsePositive(parts[2]) && Services.IsVideo(x.Path)) ?? throw new InvalidOperationException("Ce fichier n'est plus disponible dans le torrent.");
-        var source = new MediaSourceInfo { Id = id.Replace(':', '_'), Name = file.Path, Path = Services.Endpoint(_services.Config.JellyfinInternalUrl, "TorrServerPlugin/play/" + _tickets.Issue(_services.StreamUrl(status.Hash, file.Id, file.Path))).AbsoluteUri, Protocol = MediaProtocol.Http, IsRemote = true, Container = Path.GetExtension(file.Path).TrimStart('.').ToLowerInvariant(), SupportsDirectPlay = false, SupportsDirectStream = true, SupportsTranscoding = true, Size = file.Length };
-        await _media.AddMediaInfoWithProbe(source, false, id, false, false, ct);
+        var source = new MediaSourceInfo { Id = Probe.SourceId(id), Name = file.Path, Path = Services.Endpoint(_services.Config.JellyfinInternalUrl, "TorrServerPlugin/play/" + _tickets.Issue(_services.StreamUrl(status.Hash, file.Id, file.Path))).AbsoluteUri, Protocol = MediaProtocol.Http, IsRemote = true, Container = Path.GetExtension(file.Path).TrimStart('.').ToLowerInvariant(), SupportsDirectPlay = false, SupportsDirectStream = true, SupportsTranscoding = true, Size = file.Length };
+        await Probe.Run(_media, source, ct);
         return [source];
     }
     public static bool MatchesEpisode(string path, int season, int episode) => episode > 0 && (Regex.IsMatch(path, $@"(?i)(?:^|[^a-z0-9])s0*{season}e0*{episode}(?!\d)") || Regex.IsMatch(path, $@"(?i)(?:^|[^a-z0-9])0*{season}x0*{episode}(?!\d)"));

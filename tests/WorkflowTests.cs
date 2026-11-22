@@ -50,6 +50,7 @@ public sealed class WorkflowTests : IDisposable
         Assert.Contains("link=abc", tickets.Get(new Uri(source.Path).Segments.Last()));
         Assert.Empty(source.RequiredHttpHeaders);
         Assert.Equal("Show.S02E04.mkv", source.Name);
+        Assert.True(Guid.TryParseExact(source.Id, "N", out _), "Jellyfin 12.4 parses the media source id as a Guid for HLS");
         Assert.False(source.SupportsDirectPlay);
         Assert.True(source.SupportsTranscoding);
         Assert.True(((ProbeProxy)(object)media).Probed);

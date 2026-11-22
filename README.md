@@ -10,6 +10,7 @@ Ce fork de [jonathan-pp/jellyfin-torrserver](https://github.com/jonathan-pp/jell
 
 - **Indexeurs publics seulement.** Le plugin lit les indexeurs de Prowlarr et ne cherche que sur ceux qui sont actifs, publics et en torrent. S'il n'y en a aucun, la recherche est refusée : sans liste, Prowlarr interroge tous ses indexeurs.
 - **Liens magnet.** Pour les indexeurs sans fichier `.torrent`, comme 1337x, Prowlarr répond par une redirection vers un lien `magnet:`. Le plugin l'accepte désormais.
+- **Lecture sous Jellyfin 12.4.** Deux changements de Jellyfin 12.4 faisaient échouer toute lecture. Il lit l'identifiant de la source comme un GUID pour construire la playlist HLS, d'où une erreur HTTP 500 : le plugin en fournit désormais un. Le cache d'analyse plantait tant que son fichier n'existait pas : le plugin analyse désormais sans ce cache.
 - **Paquets.** Chaque version est compilée depuis ce code par la CI du dépôt, pour Jellyfin 12.4 uniquement.
 
 Dépôt d'extensions à ajouter dans Jellyfin :
