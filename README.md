@@ -19,6 +19,34 @@ Dépôt d'extensions à ajouter dans Jellyfin :
 https://github.com/sos-pc/jellyfin-torrserver/releases/latest/download/manifest.json
 ```
 
+## En téléchargement
+
+Une seconde chaîne, « En téléchargement », liste ce que Radarr et Sonarr téléchargent avec qBittorrent. Chaque titre se regarde avant la fin de son téléchargement. C'est la voie des trackers privés, que TorrServer ne doit jamais toucher.
+
+**Rien ne change pour les trackers :**
+- qBittorrent télécharge le torrent en entier, puis seede comme d'habitude ;
+- le plugin ne met jamais en pause, ne supprime rien et ne désélectionne aucun fichier ;
+- il donne seulement la priorité maximale au fichier regardé, et active l'ordre séquentiel et « premier et dernier morceaux d'abord ».
+
+**Comment Jellyfin lit un fichier incomplet**
+- Le relais du plugin lit le fichier sur le disque. Il n'envoie un bloc qu'une fois vérifiés par qBittorrent les morceaux qui le contiennent.
+- qBittorrent donne le premier et le dernier morceau d'un fichier, mais pas où le fichier commence dans son premier morceau. Le relais attend donc aussi le morceau suivant : un morceau de trop coûte un instant, alors qu'un morceau pas encore écrit donnerait des zéros au lecteur.
+- Avant la première lecture, le début et la fin du fichier doivent être là, car beaucoup de conteneurs y rangent leur index. Le délai d'attente vaut 90 secondes par défaut.
+- Avancer au-delà de la partie téléchargée attend simplement que le téléchargement y arrive.
+
+**Ce que la chaîne montre**
+- Les torrents des files de Radarr et Sonarr, avec titre, affiche, avancement, débit et fin estimée.
+- Un torrent à un seul fichier vidéo s'ouvre directement. Un pack s'ouvre sur ses vidéos, nommées d'après leurs épisodes.
+- Avec Seerr, chacun ne voit que les téléchargements qu'il a demandés, et les administrateurs les voient tous. Sans Seerr, tout le monde voit tout. `DownloadsAllowedUserIds` limite en plus la chaîne à certains comptes.
+
+**À configurer** dans la page du plugin, section « En téléchargement » :
+- l'adresse, l'utilisateur et le mot de passe de l'interface web de qBittorrent ;
+- l'adresse et la clé API de Radarr et de Sonarr ;
+- l'adresse et la clé API de Seerr, facultatives ;
+- si besoin, une correspondance de chemins.
+
+Jellyfin doit voir les fichiers de qBittorrent. Si les deux conteneurs les montent au même chemin, il n'y a rien à faire. Sinon, renseigner le début du chemin vu par qBittorrent et le même chemin vu par Jellyfin. Un montage en lecture seule suffit.
+
 Le reste de ce document vient du projet d'origine.
 
 ## Captures réelles de l’interface

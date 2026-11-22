@@ -7,12 +7,17 @@ namespace Jellyfin.Plugin.TorrServer;
 [ApiController]
 [Authorize(Policy = "RequiresElevation")]
 [Route("TorrServerPlugin/connections")]
-public sealed class CatalogController(Services services, IHttpClientFactory http) : ControllerBase
+public sealed class CatalogController(Services services, IHttpClientFactory http, QbitClient qbit, DownloadCatalog downloads) : ControllerBase
 {
     [HttpPost]
     public async Task<IReadOnlyDictionary<string, string>> Test(CancellationToken ct)
     {
         var result = new Dictionary<string, string>();
+        var config = services.Config;
+        if (qbit.Configured) result["qBittorrent"] = await Check(async () => { await qbit.Version(ct); });
+        if (!string.IsNullOrWhiteSpace(config.RadarrUrl)) result["Radarr"] = await Check(async () => { await downloads.Get(config.RadarrUrl, config.RadarrApiKey, "api/v3/system/status", ct); });
+        if (!string.IsNullOrWhiteSpace(config.SonarrUrl)) result["Sonarr"] = await Check(async () => { await downloads.Get(config.SonarrUrl, config.SonarrApiKey, "api/v3/system/status", ct); });
+        if (!string.IsNullOrWhiteSpace(config.SeerrUrl)) result["Seerr"] = await Check(async () => { await downloads.Get(config.SeerrUrl, config.SeerrApiKey, "api/v1/settings/main", ct); });
         result["TMDB"] = await Check(async () => { await services.Tmdb("configuration", ct); });
         result["Prowlarr"] = await Check(async () =>
         {
