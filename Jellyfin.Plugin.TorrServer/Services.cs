@@ -71,16 +71,28 @@ public sealed class Services
     public async Task<IReadOnlyList<Release>> Search(string query, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(Config.ProwlarrApiKey)) throw new InvalidOperationException("Configurez la clé API Prowlarr.");
-        using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint(Config.ProwlarrUrl, "api/v1/search?type=search&query=" + Uri.EscapeDataString(query)));
+        var indexers = await PublicIndexers(ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint(Config.ProwlarrUrl, "api/v1/search?type=search&query=" + Uri.EscapeDataString(query) + string.Concat(indexers.Select(id => "&indexerIds=" + id))));
         request.Headers.Add("X-Api-Key", Config.ProwlarrApiKey);
         var json = await Send(request, ct);
         if (json.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Réponse Prowlarr invalide.");
-        return json.EnumerateArray().Where(x => Text(x, "protocol").Equals("torrent", StringComparison.OrdinalIgnoreCase)).Select(x =>
+        return json.EnumerateArray().Where(x => indexers.Contains(Number(x, "indexerId")) && Text(x, "protocol").Equals("torrent", StringComparison.OrdinalIgnoreCase)).Select(x =>
         {
             var link = Text(x, "magnetUrl");
             if (string.IsNullOrEmpty(link)) link = Text(x, "downloadUrl");
             return new Release(Text(x, "guid"), Text(x, "title"), link, Number(x, "seeders"), Long(x, "size"), Text(x, "indexer"));
         }).Where(x => !string.IsNullOrWhiteSpace(x.Link)).DistinctBy(x => x.Link).OrderByDescending(x => x.Seeders).Take(Math.Clamp(Config.MaxResults, 1, 200)).ToList();
+    }
+    /// <summary>Enabled public torrent indexers. Without ids Prowlarr searches every indexer, private trackers included, so an empty list is refused.</summary>
+    private async Task<HashSet<int>> PublicIndexers(CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint(Config.ProwlarrUrl, "api/v1/indexer"));
+        request.Headers.Add("X-Api-Key", Config.ProwlarrApiKey);
+        var json = await Send(request, ct);
+        if (json.ValueKind != JsonValueKind.Array) throw new InvalidOperationException("Réponse Prowlarr invalide.");
+        var ids = json.EnumerateArray().Where(x => x.TryGetProperty("enable", out var enable) && enable.ValueKind == JsonValueKind.True && Text(x, "privacy").Equals("public", StringComparison.OrdinalIgnoreCase) && Text(x, "protocol").Equals("torrent", StringComparison.OrdinalIgnoreCase)).Select(x => Number(x, "id")).Where(id => id > 0).ToHashSet();
+        if (ids.Count == 0) throw new InvalidOperationException("Aucun indexeur public actif dans Prowlarr.");
+        return ids;
     }
     public async Task<TorrentStatus> Prepare(Release release, CancellationToken ct)
     {
@@ -88,18 +100,20 @@ public sealed class Services
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(Config.MetadataTimeoutSeconds, 5, 180)));
         ct = timeout.Token;
         TorrentStatus status;
-        if (release.Link.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase))
+        var link = release.Link;
+        byte[]? file = null;
+        if (!IsMagnet(link)) (file, link) = await ResolveLink(link, ct);
+        if (file is null)
         {
             using var request = TorrRequest("torrents");
-            request.Content = JsonContent.Create(new { action = "add", link = release.Link, title = release.Title, save_to_db = true });
+            request.Content = JsonContent.Create(new { action = "add", link, title = release.Title, save_to_db = true });
             status = ParseStatus(await Send(request, ct));
         }
         else
         {
-            var bytes = await DownloadTorrent(release.Link, ct);
             using var request = TorrRequest("torrent/upload");
             var form = new MultipartFormDataContent();
-            form.Add(new ByteArrayContent(bytes), "file", "source.torrent");
+            form.Add(new ByteArrayContent(file), "file", "source.torrent");
             form.Add(new StringContent("true"), "save");
             form.Add(new StringContent(release.Title), "title");
             request.Content = form;
@@ -122,7 +136,9 @@ public sealed class Services
         return request;
     }
     public string StreamUrl(string hash, int index, string path) => Endpoint(Config.TorrServerUrl, "stream/" + Uri.EscapeDataString(Path.GetFileName(path)) + "?link=" + Uri.EscapeDataString(hash) + "&index=" + index + "&play").AbsoluteUri;
-    private async Task<byte[]> DownloadTorrent(string link, CancellationToken ct)
+    private static bool IsMagnet(string link) => link.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase);
+    /// <summary>The .torrent file behind a link, or the magnet it redirects to: Prowlarr answers with one for indexers that have no file, such as 1337x.</summary>
+    private async Task<(byte[]? File, string Link)> ResolveLink(string link, CancellationToken ct)
     {
         var url = new Uri(link, UriKind.Absolute);
         var prowlarr = Endpoint(Config.ProwlarrUrl, "");
@@ -132,7 +148,12 @@ public sealed class Services
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             if (url.GetLeftPart(UriPartial.Authority) == prowlarr.GetLeftPart(UriPartial.Authority)) request.Headers.Add("X-Api-Key", Config.ProwlarrApiKey);
             using var response = await _http.CreateClient("TorrServerNoRedirect").SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is not null) { url = new Uri(url, response.Headers.Location); continue; }
+            if ((int)response.StatusCode is >= 300 and < 400 && response.Headers.Location is { } location)
+            {
+                if (IsMagnet(location.OriginalString)) return (null, location.OriginalString);
+                url = new Uri(url, location);
+                continue;
+            }
             Ensure(response);
             if (response.Content.Headers.ContentLength > 10 * 1024 * 1024) throw new InvalidOperationException("Fichier torrent trop volumineux.");
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
@@ -140,7 +161,7 @@ public sealed class Services
             var chunk = new byte[8192];
             int read;
             while ((read = await stream.ReadAsync(chunk, ct)) > 0) { if (buffer.Length + read > 10 * 1024 * 1024) throw new InvalidOperationException("Fichier torrent trop volumineux."); buffer.Write(chunk, 0, read); }
-            return buffer.ToArray();
+            return (buffer.ToArray(), link);
         }
         throw new InvalidOperationException("Trop de redirections du lien torrent.");
     }
