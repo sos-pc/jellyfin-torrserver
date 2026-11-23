@@ -15,6 +15,19 @@
       <div class="inputContainer"><label class="inputLabel" for="TorrServerUsername">Utilisateur TorrServer (facultatif)</label><input is="emby-input" id="TorrServerUsername" autocomplete="off"></div>
       <div class="inputContainer"><label class="inputLabel" for="TorrServerPassword">Mot de passe TorrServer</label><input is="emby-input" id="TorrServerPassword" type="password" autocomplete="off"></div>
       <div class="inputContainer"><label class="inputLabel" for="JellyfinInternalUrl">Adresse interne de Jellyfin</label><input is="emby-input" id="JellyfinInternalUrl" type="url"><div class="fieldDescription">Laisser http://127.0.0.1:8096 par défaut. Ajouter le chemin de base si Jellyfin en utilise un.</div></div>
+      <h3>En téléchargement</h3>
+      <p>Les téléchargements de Radarr et Sonarr se regardent avant la fin : qBittorrent télécharge et seede comme d'habitude, Jellyfin lit le fichier au fil de l'eau. Jellyfin doit voir les fichiers de qBittorrent sur son disque.</p>
+      <div class="inputContainer"><label class="inputLabel" for="QbittorrentUrl">Adresse de qBittorrent</label><input is="emby-input" id="QbittorrentUrl" type="url" placeholder="http://qbittorrent:8080"></div>
+      <div class="inputContainer"><label class="inputLabel" for="QbittorrentUsername">Utilisateur qBittorrent</label><input is="emby-input" id="QbittorrentUsername" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="QbittorrentPassword">Mot de passe qBittorrent</label><input is="emby-input" id="QbittorrentPassword" type="password" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="QbittorrentPathPrefix">Chemin vu par qBittorrent (facultatif)</label><input is="emby-input" id="QbittorrentPathPrefix" autocomplete="off"><div class="fieldDescription">Si qBittorrent et Jellyfin montent les téléchargements à des chemins différents : début du chemin côté qBittorrent, remplacé par celui ci-dessous.</div></div>
+      <div class="inputContainer"><label class="inputLabel" for="JellyfinPathPrefix">Même chemin vu par Jellyfin</label><input is="emby-input" id="JellyfinPathPrefix" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="RadarrUrl">Adresse de Radarr</label><input is="emby-input" id="RadarrUrl" type="url" placeholder="http://radarr:7878"></div>
+      <div class="inputContainer"><label class="inputLabel" for="RadarrApiKey">Clé API Radarr</label><input is="emby-input" id="RadarrApiKey" type="password" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="SonarrUrl">Adresse de Sonarr</label><input is="emby-input" id="SonarrUrl" type="url" placeholder="http://sonarr:8989"></div>
+      <div class="inputContainer"><label class="inputLabel" for="SonarrApiKey">Clé API Sonarr</label><input is="emby-input" id="SonarrApiKey" type="password" autocomplete="off"></div>
+      <div class="inputContainer"><label class="inputLabel" for="SeerrUrl">Adresse de Seerr (facultatif)</label><input is="emby-input" id="SeerrUrl" type="url" placeholder="http://seerr:5055"><div class="fieldDescription">Avec Seerr, chacun voit les téléchargements qu'il a demandés, et les administrateurs les voient tous. Sans lui, tout le monde les voit tous.</div></div>
+      <div class="inputContainer"><label class="inputLabel" for="SeerrApiKey">Clé API Seerr</label><input is="emby-input" id="SeerrApiKey" type="password" autocomplete="off"></div>
       <button is="emby-button" type="submit" class="raised button-submit block"><span>Enregistrer</span></button>
       <button is="emby-button" type="button" id="TestConnections" class="raised block"><span>Tester les connexions enregistrées</span></button>
       <pre id="ConnectionResults" aria-live="polite"></pre>
@@ -24,7 +37,8 @@
     (function () {
       const page = document.querySelector('#TorrServerConfigPage');
       const id = '655fbf1b-525b-4f82-bdeb-f27dd0bdd606';
-      const fields = ['TmdbApiKey', 'TmdbReadAccessToken', 'ProwlarrUrl', 'ProwlarrApiKey', 'TorrServerUrl', 'TorrServerUsername', 'TorrServerPassword', 'JellyfinInternalUrl'];
+      const fields = ['TmdbApiKey', 'TmdbReadAccessToken', 'ProwlarrUrl', 'ProwlarrApiKey', 'TorrServerUrl', 'TorrServerUsername', 'TorrServerPassword', 'JellyfinInternalUrl',
+        'QbittorrentUrl', 'QbittorrentUsername', 'QbittorrentPassword', 'QbittorrentPathPrefix', 'JellyfinPathPrefix', 'RadarrUrl', 'RadarrApiKey', 'SonarrUrl', 'SonarrApiKey', 'SeerrUrl', 'SeerrApiKey'];
       page.addEventListener('pageshow', function () {
         Dashboard.showLoadingMsg();
         ApiClient.getPluginConfiguration(id).then(function (config) {

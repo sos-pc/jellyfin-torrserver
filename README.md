@@ -19,6 +19,36 @@ Dépôt d'extensions à ajouter dans Jellyfin :
 https://github.com/sos-pc/jellyfin-torrserver/releases/latest/download/manifest.json
 ```
 
+## En téléchargement
+
+Une seconde chaîne, « En téléchargement », liste ce que Radarr et Sonarr téléchargent avec qBittorrent. Chaque titre se regarde avant la fin de son téléchargement. C'est la voie des trackers privés, que TorrServer ne doit jamais toucher.
+
+**Rien ne change pour les trackers :**
+- qBittorrent télécharge le torrent en entier, puis seede comme d'habitude ;
+- le plugin ne met jamais en pause, ne supprime rien et ne désélectionne aucun fichier ;
+- il donne seulement la priorité maximale au fichier regardé, et active l'ordre séquentiel et « premier et dernier morceaux d'abord ».
+
+**Comment Jellyfin lit un fichier incomplet**
+- Le relais du plugin lit le fichier sur le disque. Il n'envoie un bloc qu'une fois vérifiés par qBittorrent les morceaux qui le contiennent.
+- qBittorrent donne le premier et le dernier morceau d'un fichier, mais pas où le fichier commence dans son premier morceau. Le relais attend donc aussi le morceau suivant : un morceau de trop coûte un instant, alors qu'un morceau pas encore écrit donnerait des zéros au lecteur.
+- Avant la première lecture, le début du fichier doit être là : ses en-têtes et la liste de ses pistes. Le délai d'attente vaut 90 secondes par défaut.
+- La fin du fichier n'est exigée que pour un MP4 qui y range son index (`moov`), sans lequel il ne se lit pas. Un MP4 « fast start », qui garde cet index au début, s'en passe.
+- En MKV, AVI ou MPEG-TS, la fin ne contient qu'un index facultatif, que ffmpeg relit à chaque ouverture. Si elle n'est pas encore là, le relais coupe la réponse avant le premier octet : ffmpeg perd seulement cette lecture et continue sans l'index. Un refus (416, 404) lui ferait croire que tout le fichier s'arrête là, et la lecture échouerait. Le relais répond aussitôt : s'il attendait, le lecteur réclamerait d'autres segments, et Jellyfin relancerait ffmpeg en boucle.
+- Avancer au-delà de la partie téléchargée attend que le téléchargement y arrive. Pendant cette attente, le lecteur web ignore les autres sauts : pour revenir en arrière, il faut arrêter puis relancer la lecture. Jellyfin arrête de lui-même le ffmpeg qui attendait, une minute plus tard.
+
+**Ce que la chaîne montre**
+- Les torrents des files de Radarr et Sonarr, chacun dans un dossier qui porte son titre, son avancement, son débit et sa fin estimée, par exemple « No Other Land (2024) · 48 % · 0,6 Mio/s · fin dans 37 min ». Jellyfin ne renomme jamais une vidéo de chaîne après sa création, seulement un dossier : c'est donc le dossier qui porte l'avancement.
+- Dans le dossier : le film, ou les vidéos d'un pack, nommées d'après leurs épisodes. Leurs noms ne changent pas, et la reprise de lecture est conservée.
+- Avec Seerr, chacun ne voit que les téléchargements qu'il a demandés, et les administrateurs les voient tous. Sans Seerr, tout le monde voit tout. `DownloadsAllowedUserIds` limite en plus la chaîne à certains comptes.
+
+**À configurer** dans la page du plugin, section « En téléchargement » :
+- l'adresse, l'utilisateur et le mot de passe de l'interface web de qBittorrent ;
+- l'adresse et la clé API de Radarr et de Sonarr ;
+- l'adresse et la clé API de Seerr, facultatives ;
+- si besoin, une correspondance de chemins.
+
+Jellyfin doit voir les fichiers de qBittorrent. Si les deux conteneurs les montent au même chemin, il n'y a rien à faire. Sinon, renseigner le début du chemin vu par qBittorrent et le même chemin vu par Jellyfin. Un montage en lecture seule suffit.
+
 Le reste de ce document vient du projet d'origine.
 
 ## Captures réelles de l’interface

@@ -30,4 +30,20 @@ public sealed class PluginConfiguration : BasePluginConfiguration
     public int MaxResults { get; set; } = 50;
     public string[] AllowedUserIds { get; set; } = [];
     public string TorrServerUrl { get; set; } = "";
+    // « En téléchargement »: Radarr and Sonarr downloads read while qBittorrent fetches them.
+    public string QbittorrentUrl { get; set; } = "";
+    public string QbittorrentUsername { get; set; } = "";
+    public string QbittorrentPassword { get; set; } = "";
+    /// <summary>Start of the download paths as qBittorrent sees them, replaced by <see cref="JellyfinPathPrefix"/> when the two containers mount them elsewhere.</summary>
+    public string QbittorrentPathPrefix { get; set; } = "";
+    public string JellyfinPathPrefix { get; set; } = "";
+    public string RadarrUrl { get; set; } = "";
+    public string RadarrApiKey { get; set; } = "";
+    public string SonarrUrl { get; set; } = "";
+    public string SonarrApiKey { get; set; } = "";
+    /// <summary>With Seerr, each user sees the downloads they asked for, and administrators see them all. Without it, everyone sees them all.</summary>
+    public string SeerrUrl { get; set; } = "";
+    public string SeerrApiKey { get; set; } = "";
+    public int DownloadStartTimeoutSeconds { get; set; } = 90;
+    public string[] DownloadsAllowedUserIds { get; set; } = [];
 }
